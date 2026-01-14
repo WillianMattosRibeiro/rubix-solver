@@ -1,0 +1,12 @@
+{
+	"name": "rubix-solver",
+	"image": "mcr.microsoft.com/devcontainers/base:bullseye",
+	"runArgs": ["--name", "rubix-solver", "--device=/dev/video0:/dev/video0"],
+	"features": {
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {},
+		"ghcr.io/devcontainers/features/python:1": {}
+	},
+	"extensions": [
+		"kilocode.kilo-code"
+	]
+}

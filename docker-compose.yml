@@ -1,0 +1,11 @@
+services:
+  rubix-solver:
+    build: .
+    volumes:
+      - .:/app
+    devices:
+      - /dev/video0
+    environment:
+      - DISPLAY
+    network_mode: host
+    command: python src/main.py
