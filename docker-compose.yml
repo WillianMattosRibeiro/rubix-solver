@@ -1,11 +1,19 @@
 services:
-  rubix-solver:
-    build: .
-    volumes:
-      - .:/app
-    devices:
-      - /dev/video0
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
     environment:
-      - DISPLAY
-    network_mode: host
-    command: python src/main.py
+      - ENV=development
+    volumes:
+      - ./backend:/app
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules

@@ -1,1 +1,0 @@
-# Utilities package for Rubik's Cube Solver

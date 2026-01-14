@@ -1,149 +1,88 @@
-# Rubik's Cube Solver
+# Rubik's Cube Solver Web App
 
-A real-time computer vision application that detects a 3x3 Rubik's Cube from webcam feed, recognizes colors, solves the cube, and provides a step-by-step solving guide with visual feedback.
+A web-based application that uses computer vision to detect a Rubik's Cube from your webcam and provides step-by-step solving instructions.
 
 ## Features
 
-- **Real-time Detection**: Uses computer vision to detect Rubik's Cube faces in webcam feed
-- **Color Recognition**: Robust color classification using LAB color space for lighting invariance
-- **Automatic Solving**: Integrates with kociemba algorithm for optimal solutions
-- **Interactive GUI**: Clean, minimalist dark-mode interface inspired by SpaceX/Grok aesthetics
-- **Move Tracking**: Visual feedback for each solving move (green for correct, red for incorrect)
-- **Calibration**: Built-in color calibration for reliable recognition under different lighting
+- Real-time cube detection using webcam
+- Automatic color recognition and calibration
+- Step-by-step solving algorithm display
+- Clean, minimalist dark UI
+- Responsive design for desktop and tablets
 
-## Requirements
+## Tech Stack
 
+### Backend
 - Python 3.11+
-- Webcam
-- Linux/Windows/macOS
+- FastAPI
+- OpenCV for image processing
+- Ultralytics YOLOv8 for object detection
+- Kociemba algorithm for cube solving
 
-## Quick Start
+### Frontend
+- React 18 with TypeScript
+- Vite for build tooling
+- Tailwind CSS for styling
+- WebSocket for real-time communication
 
-### Using Docker (Recommended)
+## Setup and Installation
 
-1. **Clone the repository**:
+1. Clone the repository:
    ```bash
    git clone <repository-url>
-   cd rubix-solver
+   cd rubix-solver-web
    ```
 
-2. **Build and run with Docker Compose**:
+2. Start the services using Docker Compose:
    ```bash
    docker-compose up --build
    ```
 
-### Local Installation
+3. Open your browser and navigate to `http://localhost:3000`
 
-1. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## Usage
 
-2. **Run the application**:
-   ```bash
-   python src/main.py
-   ```
+1. Allow camera access when prompted
+2. Show the entire Rubik's Cube to the camera
+3. Wait for color calibration
+4. Follow the displayed moves to solve the cube
+5. Each correct move will turn green, incorrect moves will flash red
 
-## How to Use
+## API Endpoints
 
-1. **Launch the application** - The GUI will open with camera feed
-2. **Calibration phase** - Show color samples when prompted (currently uses predefined colors)
-3. **Scan cube faces** - Show each of the 6 faces (U/R/F/D/L/B) to the camera sequentially
-4. **Solve** - Follow the displayed moves, performing them on your physical cube
-5. **Feedback** - Moves turn green when performed correctly, red when incorrect
-
-## Calibration Tips
-
-- Ensure good, even lighting without harsh shadows
-- Hold the cube steady when scanning faces
-- Keep the cube face parallel to the camera
-- Avoid reflective surfaces or backgrounds that match cube colors
-- If colors are misrecognized, restart the application for recalibration
-
-## Project Structure
-
-```
-rubix-solver/
-├── src/
-│   ├── main.py                 # Application entry point
-│   ├── cube_detector.py        # Cube face detection
-│   ├── color_recognition.py    # Color classification
-│   ├── cube_state.py          # Cube state management
-│   ├── solver.py              # Kociemba solver integration
-│   ├── move_tracker.py        # Move feedback system
-│   ├── gui/
-│   │   ├── theme.py           # Dark theme configuration
-│   │   └── widgets.py         # UI components
-│   └── utils/
-│       ├── colors.py          # Color constants
-│       ├── drawing.py         # CV drawing helpers
-│       └── fps.py             # Performance monitoring
-├── assets/
-│   └── fonts/                 # Font references
-├── Dockerfile                 # Container build
-├── docker-compose.yml         # Container orchestration
-└── requirements.txt           # Python dependencies
-```
-
-## Technical Details
-
-- **Computer Vision**: OpenCV with contour detection for cube face identification
-- **Color Space**: LAB color space for robust color distance calculations
-- **Solver**: Kociemba two-phase algorithm for optimal solutions
-- **GUI**: Dear PyGui for immediate mode UI with custom dark theme
-- **Performance**: Targets 15+ FPS on standard hardware
-
-## Known Limitations
-
-- Requires sequential face scanning (not simultaneous 6-face detection)
-- Color recognition may struggle with very poor lighting or unusual cube colors
-- Move detection is not fully implemented (feedback is placeholder)
-- GUI colors for moves are indicated in text, not visually colored
-- No audio feedback or advanced animations
-- Webcam resolution and angle sensitivity
-
-## Troubleshooting
-
-**Camera not detected**:
-- Ensure webcam permissions are granted
-- Try different camera index in `cv2.VideoCapture(0)`
-
-**Poor color recognition**:
-- Improve lighting conditions
-- Clean camera lens
-- Ensure cube stickers are not worn
-
-**Application crashes**:
-- Check Python version compatibility
-- Verify all dependencies are installed
-- Ensure webcam is not used by other applications
+- `GET /` - Health check
+- `WebSocket /ws` - Real-time cube detection and solving
 
 ## Development
 
-### Adding New Features
-
-1. Extend modules in `src/` following existing patterns
-2. Add type hints for all new functions
-3. Update GUI components in `src/gui/`
-4. Test with various lighting conditions
-
-### Building Docker Image
-
+### Backend
 ```bash
-docker build -t rubix-solver .
-docker run --device=/dev/video0 -e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix rubix-solver
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload
 ```
 
-## License
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-[Add license information]
+## Limitations
+
+- Requires good lighting conditions
+- Cube must be fully visible in the camera frame
+- Currently optimized for desktop/tablet; mobile support is limited
+- Color detection may need recalibration for different lighting
 
 ## Contributing
 
-[Add contribution guidelines]
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Submit a pull request
 
-## Acknowledgments
+## License
 
-- Kociemba algorithm for cube solving
-- OpenCV community for computer vision tools
-- Dear PyGui for the UI framework
+MIT License
