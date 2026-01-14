@@ -1,5 +1,7 @@
 import cv2
 import numpy as np
+import kociemba
+import random
 from ultralytics import YOLO
 
 class CubeDetector:
@@ -16,24 +18,19 @@ class CubeDetector:
         }
         self.calibrated = False
 
-    def detect_cube(self, img):
-        # Convert to HSV
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+    def detect_presence(self, img):
+        # Simple presence check: assume cube is present if image has sufficient color variance
+        # For demo, randomly decide
+        return "cube_present" if random.random() > 0.3 else "no_cube"
 
-        # Simple detection: check if image has enough color variation (placeholder for cube presence)
-        # In real implementation, detect contours or use ML
-
-        # For demo, calibrate on first frame, then detect on every frame
-        if not self.calibrated:
-            self.calibrated = True  # Calibrate on first frame
-            return "calibrating", None
-
-        # Simulate detection: return a random scrambled state for demo
-        # In production, extract real state
-        import random
-        colors = ['U', 'D', 'L', 'R', 'F', 'B']
-        state = ''.join(random.choice(colors) for _ in range(54))
-        return "detected", state
+    def detect_face(self, img):
+        # For demo, randomly detect face and return random colors
+        if random.random() > 0.5:
+            colors = 'RGBOYW'
+            face_colors = ''.join(random.choice(colors) for _ in range(9))
+            return "face_detected", face_colors
+        else:
+            return "face_not_detected", None
 
     def extract_colors(self, hsv):
         # Placeholder: divide image into 9 parts, detect dominant color
