@@ -24,6 +24,20 @@ function App() {
     B: 'BBBBBBBBB', // Blue
     O: 'OOOOOOOOO'  // Orange
   })
+  // const [confirmedFaces, setConfirmedFaces] = useState<{[key: string]: boolean}>({
+  //   Y: false,
+  //   W: false,
+  //   R: false,
+  //   G: false,
+  //   B: false,
+  //   O: false
+  // })
+
+  // Update cubeFaces to reflect calibrated colors
+  useEffect(() => {
+    // This effect could be triggered by calibration updates from backend
+    // For now, assume cubeFaces state is updated elsewhere when calibration confirms
+  }, [cubeFaces])
   const [confirmedFaces, setConfirmedFaces] = useState<{[key: string]: boolean}>({
     Y: false,
     W: false,
@@ -40,6 +54,7 @@ function App() {
   const [calibrationMessage, setCalibrationMessage] = useState('')
   const [detectedColor, setDetectedColor] = useState('')
   const [expectedColor, setExpectedColor] = useState('')
+  const [showCalibrationSuccess, setShowCalibrationSuccess] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
   const cameraRef = useRef<CameraFeedRef>(null)
 
@@ -110,6 +125,27 @@ function App() {
           setMoves([])
           setCurrentMove(0)
           setIsError(false)
+        } else if (data.status === 'calibration_started') {
+          setIsCalibrating(true)
+          setCalibrationMessage(data.message || 'Calibration started...')
+          setDetectedColor('')
+          setExpectedColor('')
+        } else if (data.status === 'calibration_update') {
+          setCalibrationMessage(data.message || '')
+          setDetectedColor(data.detectedColor || '')
+          setExpectedColor(data.expectedColor || '')
+        } else if (data.status === 'calibration_completed') {
+          setCalibrationMessage(data.message || 'Calibration completed.')
+          setIsCalibrating(false)
+          setDetectedColor('')
+          setExpectedColor('')
+          // Show calibrate button again by resetting isCalibrating to false
+          setIsCalibrating(false)
+        } else if (data.status === 'calibration_reset') {
+          setIsCalibrating(false)
+          setCalibrationMessage('')
+          setDetectedColor('')
+          setExpectedColor('')
         } else {
           setStatus(data.message || 'Position the cube so all faces are visible')
           setIsError(false)
@@ -205,9 +241,10 @@ function App() {
         </h1>
         <div className="flex flex-col lg:flex-row items-start justify-center gap-8">
           <div className="flex flex-col items-center">
-            <div className={`mb-6 text-xl text-center ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
+            {/* Removed live green label above the video */}
+            {/* <div className={`mb-6 text-xl text-center ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
               {status}
-            </div>
+            </div> */}
             <CameraFeed ref={cameraRef} ws={wsRef.current} wsOpen={isWsOpen} deviceId={selectedDeviceId} cubeBbox={cubeBbox} liveInputFace={liveInputFace} />
             {isConfirming && (
               <div className="flex flex-col items-center mt-4 space-y-2">

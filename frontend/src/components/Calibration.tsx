@@ -11,19 +11,18 @@ interface CalibrationProps {
   onResetCalibration: () => void
 }
 
+const calibrationColors = ['Y', 'W', 'R', 'G', 'B', 'O']
+
 function Calibration({ ws, wsOpen, isCalibrating, calibrationMessage, detectedColor, expectedColor, onStartCalibration, onResetCalibration }: CalibrationProps) {
+  const [calibrationStep, setCalibrationStep] = useState(0)
+  const [manualSetMode, setManualSetMode] = useState(false)
 
   const startCalibration = () => {
     if (ws && wsOpen) {
       ws.send(JSON.stringify({ type: 'start_calibration' }))
       onStartCalibration()
-    }
-  }
-
-  const calibrateSpecificColor = (color: string) => {
-    if (ws && wsOpen) {
-      ws.send(JSON.stringify({ type: 'calibrate_specific_color', color }))
-      onStartCalibration()
+      setCalibrationStep(0)
+      setManualSetMode(false)
     }
   }
 
@@ -31,68 +30,37 @@ function Calibration({ ws, wsOpen, isCalibrating, calibrationMessage, detectedCo
     if (ws && wsOpen) {
       ws.send(JSON.stringify({ type: 'reset_calibration' }))
       onResetCalibration()
+      setCalibrationStep(0)
+      setManualSetMode(false)
     }
   }
 
   const confirmCalibration = (selectedColor?: string) => {
     if (ws && wsOpen) {
-      ws.send(JSON.stringify({ type: 'confirm_calibration', selected_color: selectedColor }))
+      ws.send(JSON.stringify({ type: 'confirm_calibration', selected_color: selectedColor || calibrationColors[calibrationStep] }))
+      setCalibrationStep(prev => Math.min(prev + 1, calibrationColors.length))
+      setManualSetMode(false)
     }
   }
 
-  const selectColor = (color: string) => {
+  const handleSetManually = () => {
+    setManualSetMode(true)
+  }
+
+  const handleManualColorSelect = (color: string) => {
     confirmCalibration(color)
   }
 
-  // This would be called from App when WS message received
-  // For now, assume App handles the WS messages and updates state
-
-  return (
-    <section className="mt-8">
-      <h2 className="text-xl font-semibold mb-4 text-blue-400">Calibration</h2>
-      {!isCalibrating ? (
+  if (!isCalibrating) {
+    return (
+      <section className="mt-8">
+        <h2 className="text-xl font-semibold mb-4 text-blue-400">Calibration</h2>
         <div className="space-y-2">
           <button
             onClick={startCalibration}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white mr-2"
           >
-            Start Calibration
-          </button>
-          <button
-            onClick={() => calibrateSpecificColor('Y')}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white mr-2"
-          >
-            Calibrate Yellow
-          </button>
-          <button
-            onClick={() => calibrateSpecificColor('W')}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white mr-2"
-          >
-            Calibrate White
-          </button>
-          <button
-            onClick={() => calibrateSpecificColor('R')}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white mr-2"
-          >
-            Calibrate Red
-          </button>
-          <button
-            onClick={() => calibrateSpecificColor('G')}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white mr-2"
-          >
-            Calibrate Green
-          </button>
-          <button
-            onClick={() => calibrateSpecificColor('B')}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white mr-2"
-          >
-            Calibrate Blue
-          </button>
-          <button
-            onClick={() => calibrateSpecificColor('O')}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white mr-2"
-          >
-            Calibrate Orange
+            {calibrationStep > 0 ? 'Recalibrate' : 'Start Calibration'}
           </button>
           <button
             onClick={resetCalibration}
@@ -101,34 +69,56 @@ function Calibration({ ws, wsOpen, isCalibrating, calibrationMessage, detectedCo
             Reset to Default
           </button>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <p className="text-lg">{calibrationMessage}</p>
-          {detectedColor && (
-            <div>
-              <p>Detected: {detectedColor}, Expected: {expectedColor}</p>
-              <button
-                onClick={() => confirmCalibration()}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white mr-2"
-              >
-                Confirm {detectedColor}
-              </button>
-              <div className="mt-2">
-                <p>Select correct color:</p>
-                {['Y', 'W', 'R', 'G', 'B', 'O'].map(color => (
-                  <button
-                    key={color}
-                    onClick={() => selectColor(color)}
-                    className="px-2 py-1 bg-gray-600 hover:bg-gray-500 rounded text-white mr-1"
-                  >
-                    {color}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      </section>
+    )
+  }
+
+  if (calibrationStep >= calibrationColors.length) {
+    return (
+      <section className="mt-8">
+        <h2 className="text-xl font-semibold mb-4 text-blue-400">Calibration</h2>
+        {/* Removed text success, replaced with notification in App.tsx */}
+        <button
+          onClick={resetCalibration}
+          className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-white"
+        >
+          Reset to Default
+        </button>
+      </section>
+    )
+  }
+
+  return (
+    <section className="mt-8">
+      <h2 className="text-xl font-semibold mb-4 text-blue-400">Calibration</h2>
+      <p className="text-lg">{calibrationMessage}</p>
+      <div>
+        <p>Current Color: {calibrationColors[calibrationStep]}</p>
+        <button
+          onClick={() => confirmCalibration(calibrationColors[calibrationStep])}
+          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white mr-2"
+        >
+          Confirm {calibrationColors[calibrationStep]}
+        </button>
+        <button
+          onClick={handleSetManually}
+          className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 rounded text-white"
+        >
+          Set Manually
+        </button>
+        {manualSetMode && (
+          <select
+            onChange={(e) => handleManualColorSelect(e.target.value)}
+            className="ml-2 p-1 rounded bg-gray-700 text-white"
+            defaultValue=""
+          >
+            <option value="" disabled>Select color</option>
+            {calibrationColors.map(color => (
+              <option key={color} value={color}>{color}</option>
+            ))}
+          </select>
+        )}
+      </div>
     </section>
   )
 }

@@ -154,6 +154,16 @@ const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, dev
           ctx.lineTo(x + w, y + i * cellH)
           ctx.stroke()
         }
+
+        // Draw center piece highlight (middle cell)
+        const centerX = x + cellW * 1 + cellW / 2
+        const centerY = y + cellH * 1 + cellH / 2
+        const radius = Math.min(cellW, cellH) / 3
+        ctx.beginPath()
+        ctx.strokeStyle = 'lime'
+        ctx.lineWidth = 3
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI)
+        ctx.stroke()
       }
     }
   }, [cubeBbox])
