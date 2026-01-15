@@ -6,8 +6,8 @@ from ultralytics import YOLO
 
 class CubeDetector:
     def __init__(self):
-        # Define HSV color ranges for Rubik's cube colors
-        self.color_ranges = {
+        # Define default HSV color ranges for Rubik's cube colors
+        self.default_color_ranges = {
             # Calibrated HSV ranges for better distinction, especially between red and orange
             'R': ([0, 120, 70], [10, 255, 255]),  # Red lower range
             'R2': ([170, 120, 70], [180, 255, 255]),  # Red upper range
@@ -17,25 +17,80 @@ class CubeDetector:
             'B': ([90, 50, 50], [130, 255, 255]),  # Blue
             'W': ([0, 0, 200], [180, 30, 255]),  # White
         }
-        self.calibrated = False
+        self.color_ranges = self.default_color_ranges.copy()
+        self.calibrated_colors = set()  # Track which colors have been calibrated
 
-    def detect_presence(self, img):
-        # Improved presence detection based on color variance
+    def detect_presence(self, img, roi=None):
+        # If ROI is specified, crop the image
+        if roi:
+            x, y, w, h = roi
+            x = max(0, int(x))
+            y = max(0, int(y))
+            w = max(1, int(w))
+            h = max(1, int(h))
+            if x + w > img.shape[1]:
+                w = img.shape[1] - x
+            if y + h > img.shape[0]:
+                h = img.shape[0] - y
+            img = img[y:y+h, x:x+w]
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         std_dev = np.std(hsv[:, :, 0])
         return "cube_present" if std_dev > 10 else "cube_absent"
 
-    def calibrate(self, img):
-        # Placeholder for calibration logic if needed
-        self.calibrated = True
+    def calibrate_color(self, color, img):
+        # Calibrate a specific color by analyzing the provided image
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        # Flatten the image to get all pixels
+        pixels = hsv.reshape(-1, 3)
+        # Filter out low saturation/value for white/black, but for now, use all
+        if color == 'W':
+            # For white, use low saturation
+            mask = pixels[:, 1] < 50
+        else:
+            mask = pixels[:, 1] > 50  # High saturation for colors
+
+        if np.sum(mask) == 0:
+            return False
+
+        filtered_pixels = pixels[mask]
+        h_vals = filtered_pixels[:, 0]
+        s_vals = filtered_pixels[:, 1]
+        v_vals = filtered_pixels[:, 2]
+
+        # For red, handle wrap-around
+        if color == 'R':
+            # Red can be 0-10 or 170-180
+            h_min = np.min(h_vals)
+            h_max = np.max(h_vals)
+            if h_max - h_min > 100:  # Wrap around
+                # Split into two ranges, but for simplicity, use the range
+                h_min = 0
+                h_max = 180
+            s_min = max(0, np.min(s_vals) - 20)
+            s_max = 255
+            v_min = max(0, np.min(v_vals) - 20)
+            v_max = 255
+            self.color_ranges['R'] = ([h_min, s_min, v_min], [h_max, s_max, v_max])
+            self.color_ranges['R2'] = ([h_min, s_min, v_min], [h_max, s_max, v_max])  # Same for now
+        else:
+            h_min = max(0, np.min(h_vals) - 10)
+            h_max = min(180, np.max(h_vals) + 10)
+            s_min = max(0, np.min(s_vals) - 20)
+            s_max = 255
+            v_min = max(0, np.min(v_vals) - 20)
+            v_max = 255
+            self.color_ranges[color] = ([h_min, s_min, v_min], [h_max, s_max, v_max])
+
+        self.calibrated_colors.add(color)
         return True
 
     def reset_calibration(self):
-        self.calibrated = False
+        self.color_ranges = self.default_color_ranges.copy()
+        self.calibrated_colors.clear()
         return True
 
-    def is_calibrated(self):
-        return self.calibrated
+    def is_color_calibrated(self, color):
+        return color in self.calibrated_colors
 
     def validate_face_string(self, face_str):
         # Validate that face string is exactly 9 characters for 3x3 face

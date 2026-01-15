@@ -219,11 +219,78 @@ const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, dev
         }
       }
 
+      // Draw instructions above the overlay
+      ctx.font = '18px Arial'
+      ctx.fillStyle = 'white'
+      ctx.textAlign = 'center'
+      ctx.fillText('Place the Rubik\'s Cube inside the square', overlay.width / 2, 30)
+
       requestAnimationFrame(draw)
     }
 
     draw()
   }, [cubeBbox, liveInputFace])
+
+  // Modify frame capture to crop to cubeBbox if available
+  useImperativeHandle(ref, () => ({
+    capture: () => {
+      if (videoRef.current && canvasRef.current && ws && ws.readyState === WebSocket.OPEN && isVideoReady) {
+        const canvas = canvasRef.current
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          const [x, y, w, h] = cubeBbox || [0, 0, videoRef.current.videoWidth, videoRef.current.videoHeight]
+          canvas.width = w
+          canvas.height = h
+          ctx.clearRect(0, 0, w, h)
+          ctx.drawImage(videoRef.current, x, y, w, h, 0, 0, w, h)
+          const dataURL = canvas.toDataURL('image/jpeg', 0.8)
+          const base64 = dataURL.split(',')[1]
+          ws.send(JSON.stringify({ type: 'frame', data: base64 }))
+        }
+      }
+    }
+  }))
+
+  // Modify automatic frame sending to crop to cubeBbox if available
+  useEffect(() => {
+    if (!wsOpen || !ws || ws.readyState !== WebSocket.OPEN) {
+      return
+    }
+
+    const interval = setInterval(() => {
+      if (videoRef.current && canvasRef.current && ws.readyState === WebSocket.OPEN && isVideoReady && videoRef.current.videoWidth > 0) {
+        const canvas = canvasRef.current
+        const ctx = canvas.getContext('2d')
+        if (ctx) {
+          const [x, y, w, h] = cubeBbox || [0, 0, videoRef.current.videoWidth, videoRef.current.videoHeight]
+          // Limit size to max 320x240 while preserving aspect ratio
+          let width = w
+          let height = h
+          const maxWidth = 320
+          const maxHeight = 240
+          const aspectRatio = w / h
+          if (width > maxWidth) {
+            width = maxWidth
+            height = maxWidth / aspectRatio
+          }
+          if (height > maxHeight) {
+            height = maxHeight
+            width = maxHeight * aspectRatio
+          }
+          canvas.width = width
+          canvas.height = height
+          ctx.clearRect(0, 0, width, height)
+          ctx.drawImage(videoRef.current, x, y, w, h, 0, 0, width, height)
+          const dataURL = canvas.toDataURL('image/jpeg', 0.7)
+          const base64 = dataURL.split(',')[1]
+          ws.send(JSON.stringify({ type: 'frame', data: base64 }))
+        }
+      }
+    }, 250)
+
+    return () => clearInterval(interval)
+  }, [ws, wsOpen, isVideoReady, cubeBbox])
+
 
   return (
     <div className="mb-8 relative">

@@ -3,6 +3,7 @@ import CameraFeed, { CameraFeedRef } from './components/CameraFeed'
 import AlgorithmDisplay from './components/AlgorithmDisplay'
 import CubeFaces from './components/CubeFaces'
 import VideoInputDropdown from './components/VideoInputDropdown'
+import Calibration from './components/Calibration'
 
 function App() {
   const [status, setStatus] = useState('Connecting to server...')
@@ -35,6 +36,10 @@ function App() {
   const [liveInputFace, setLiveInputFace] = useState<string | null>(null)
   const [liveInputColors, setLiveInputColors] = useState<string>('UUUUUUUUU')
   const [isLoading, setIsLoading] = useState(true)
+  const [isCalibrating, setIsCalibrating] = useState(false)
+  const [calibrationMessage, setCalibrationMessage] = useState('')
+  const [detectedColor, setDetectedColor] = useState('')
+  const [expectedColor, setExpectedColor] = useState('')
   const wsRef = useRef<WebSocket | null>(null)
   const cameraRef = useRef<CameraFeedRef>(null)
 
@@ -140,6 +145,26 @@ function App() {
     }
   }, [])
 
+  // Define a fixed or responsive cube bounding box for the overlay
+  useEffect(() => {
+    // For simplicity, define a centered square box with size relative to window or video size
+    // Here we use fixed size for demo, can be made dynamic
+    const width = 240
+    const height = 240
+    const x = 320 - width / 2
+    const y = 240 - height / 2
+    setCubeBbox([x, y, width, height])
+  }, [])
+
+  // Send cubeBbox to backend via WebSocket periodically
+  useEffect(() => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !cubeBbox) return
+    const interval = setInterval(() => {
+      wsRef.current?.send(JSON.stringify({ type: 'cube_bbox', bbox: cubeBbox }))
+    }, 1000) // send every 1 second
+    return () => clearInterval(interval)
+  }, [cubeBbox])
+
   // Render loading animation if loading
   if (isLoading) {
     return (
@@ -158,6 +183,21 @@ function App() {
       <aside className="w-64 bg-gray-800 p-4 border-r border-gray-700">
         <h2 className="text-xl font-semibold mb-4 text-blue-400">Settings</h2>
         <VideoInputDropdown selectedDeviceId={selectedDeviceId} onDeviceChange={setSelectedDeviceId} />
+        <Calibration
+          ws={wsRef.current}
+          wsOpen={isWsOpen}
+          isCalibrating={isCalibrating}
+          calibrationMessage={calibrationMessage}
+          detectedColor={detectedColor}
+          expectedColor={expectedColor}
+          onStartCalibration={() => setIsCalibrating(true)}
+          onResetCalibration={() => {
+            setIsCalibrating(false)
+            setCalibrationMessage('')
+            setDetectedColor('')
+            setExpectedColor('')
+          }}
+        />
       </aside>
       <main className="flex-1 p-4">
         <h1 className="text-5xl font-extrabold mb-8 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-600 text-center">
