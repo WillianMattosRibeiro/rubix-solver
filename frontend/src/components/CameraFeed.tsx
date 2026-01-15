@@ -5,13 +5,14 @@ interface CameraFeedProps {
   wsOpen: boolean
   deviceId?: string
   cubeBbox?: [number, number, number, number]  // x, y, w, h
+  liveInputFace?: string | null
 }
 
 export interface CameraFeedRef {
   capture: () => void
 }
 
-const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, deviceId, cubeBbox }, ref) => {
+const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, deviceId, cubeBbox, liveInputFace }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
