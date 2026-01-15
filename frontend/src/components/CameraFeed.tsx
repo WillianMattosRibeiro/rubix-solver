@@ -193,7 +193,7 @@ const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, dev
         }
 
         // Draw live detected face color label above the cube
-        if (liveInputFace) {
+        if (typeof liveInputFace !== 'undefined' && liveInputFace !== null) {
           const labelMap: {[key: string]: string} = {
             Y: 'Yellow',
             W: 'White',
