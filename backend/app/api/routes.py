@@ -26,14 +26,21 @@ async def websocket_endpoint(websocket: WebSocket):
             print("Received data:", data["type"])
 
             if data["type"] == "frame":
-                print("Received frame from frontend")
-                image_data = base64.b64decode(data["data"])
-                np_img = np.frombuffer(image_data, np.uint8)
-                img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
-                if img is None:
-                    print("Failed to decode image")
+                print("Received frame from frontend, data length:", len(data["data"]))
+                try:
+                    image_data = base64.b64decode(data["data"])
+                    print("Base64 decoded, length:", len(image_data))
+                    np_img = np.frombuffer(image_data, np.uint8)
+                    img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+                    if img is None:
+                        print("Failed to decode image with OpenCV")
+                        await websocket.send_json({"status": "error", "message": "Failed to process image"})
+                        continue
+                    print("Image decoded successfully, shape:", img.shape)
+                except Exception as e:
+                    print("Error processing frame:", str(e))
+                    await websocket.send_json({"status": "error", "message": f"Error processing frame: {str(e)}"})
                     continue
-                print("Image decoded, shape:", img.shape)
 
                 if not cube_present:
                     status = detector.detect_presence(img)
@@ -44,13 +51,11 @@ async def websocket_endpoint(websocket: WebSocket):
                     else:
                         await websocket.send_json({"status": "no_cube", "message": "No cube detected. Place the cube in front of the camera."})
                 else:
-                    status, face_colors = detector.detect_face(img)
-                    if status == "face_detected":
-                        faces_states[current_face] = face_colors
+                    if data["type"] == "confirm_face":
                         current_face += 1
                         if current_face < 6:
-                            message = f"{faces[current_face-1].capitalize()} face detected. Now show the {faces[current_face]} face."
-                            await websocket.send_json({"status": "face_detected", "message": message})
+                            message = f"Confirmed. Now show the {faces[current_face]} face."
+                            await websocket.send_json({"status": "face_confirmed", "message": message})
                         else:
                             # All faces captured
                             full_state = ''.join(faces_states)
@@ -64,6 +69,12 @@ async def websocket_endpoint(websocket: WebSocket):
                             current_face = 0
                             cube_present = False
                     else:
-                        await websocket.send_json({"status": "face_not_detected", "message": f"{faces[current_face].capitalize()} face not detected. Adjust the cube to show the {faces[current_face]} face clearly."})
+                        status, face_colors, bbox = detector.detect_face(img)
+                        if status == "face_detected":
+                            faces_states[current_face] = face_colors
+                            message = f"{faces[current_face].capitalize()} face detected. Please confirm if correct."
+                            await websocket.send_json({"status": "face_detected", "message": message, "face": faces[current_face], "colors": face_colors, "bbox": bbox})
+                        else:
+                            await websocket.send_json({"status": "face_not_detected", "message": f"{faces[current_face].capitalize()} face not detected. Adjust the cube to show the {faces[current_face]} face clearly."})
     except Exception as e:
         print(f"WebSocket error: {e}")
