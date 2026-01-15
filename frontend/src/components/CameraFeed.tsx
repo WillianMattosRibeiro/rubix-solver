@@ -209,6 +209,14 @@ const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, dev
           ctx.textAlign = 'center'
           ctx.fillText(label, x + w / 2, y - 10)
         }
+
+        // Enforce 3x3: warn if bbox dimensions are too small for 3x3 grid
+        if (w < 30 || h < 30) {
+          ctx.font = '16px Arial'
+          ctx.fillStyle = 'red'
+          ctx.textAlign = 'center'
+          ctx.fillText('Cube too small for 3x3 detection', x + w / 2, y + h + 20)
+        }
       }
 
       requestAnimationFrame(draw)

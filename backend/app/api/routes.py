@@ -72,8 +72,8 @@ async def websocket_endpoint(websocket: WebSocket):
                         status, face_colors, bbox = detector.detect_face(img)
                         if status == "face_detected":
                             faces_states[current_face] = face_colors
-                            message = f"{faces[current_face].capitalize()} face detected. Please confirm if correct."
-                            await websocket.send_json({"status": "face_detected", "message": message, "face": faces[current_face], "colors": face_colors, "bbox": bbox})
+                            message = f"3x3 {faces[current_face].capitalize()} face detected. Please confirm if correct."
+                            await websocket.send_json({"status": "face_detected", "message": message, "face": faces[current_face], "colors": face_colors, "bbox": bbox, "cube_type": "3x3"})
                         else:
                             await websocket.send_json({"status": "face_not_detected", "message": f"{faces[current_face].capitalize()} face not detected. Adjust the cube to show the {faces[current_face]} face clearly."})
     except Exception as e:

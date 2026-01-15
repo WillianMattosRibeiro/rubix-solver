@@ -29,7 +29,12 @@ const faceLabels = {
 const CubeFaces = ({ faces, confirmedFaces, onConfirm, onRescan, onGetSolution }: CubeFacesProps) => {
   const renderFace = (faceName: string, colors: string) => {
     const isConfirmed = confirmedFaces && confirmedFaces[faceName] ? true : false
-    const faceColors = faces && faces[faceName] ? faces[faceName] : 'UUUUUUUUU'
+    let faceColors = faces && faces[faceName] ? faces[faceName] : 'UUUUUUUUU'
+    // Enforce 3x3: validate exactly 9 characters, else default
+    if (faceColors.length !== 9) {
+      console.warn(`Face ${faceName} has ${faceColors.length} colors, expected 9. Defaulting to unknown.`)
+      faceColors = 'UUUUUUUUU'
+    }
     const label = faceLabels[faceName.toUpperCase()] || faceName
     return (
       <div key={faceName} className="mb-4">

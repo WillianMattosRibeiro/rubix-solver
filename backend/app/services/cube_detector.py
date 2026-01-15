@@ -20,10 +20,10 @@ class CubeDetector:
         self.calibrated = False
 
     def detect_presence(self, img):
-        # Detect cube presence based on color variance in hue channel
+        # Improved presence detection based on color variance
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        hue_std = np.std(hsv[:, :, 0])
-        return "cube_present" if hue_std > 10 else "cube_absent"
+        std_dev = np.std(hsv[:, :, 0])
+        return "cube_present" if std_dev > 10 else "cube_absent"
 
     def calibrate(self, img):
         # Placeholder for calibration logic if needed
@@ -37,8 +37,13 @@ class CubeDetector:
     def is_calibrated(self):
         return self.calibrated
 
+    def validate_face_string(self, face_str):
+        # Validate that face string is exactly 9 characters for 3x3 face
+        return len(face_str) == 9 and all(c in 'ROYGBW' for c in face_str)
+
     def isolate_cube(self, img):
         # Isolate the cube from the background using thresholding and contour detection
+        # Enforce 3x3 cube support: resize cropped area to fixed 90x90 for consistent 3x3 grid
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
         thresh = cv2.adaptiveThreshold(blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2)
@@ -49,8 +54,10 @@ class CubeDetector:
             x, y, w, h = cv2.boundingRect(largest_contour)
             # Crop to the cube area
             cube_img = img[y:y+h, x:x+w]
+            # Resize to fixed 90x90 to enforce 3x3 grid (30x30 per sticker)
+            cube_img = cv2.resize(cube_img, (90, 90), interpolation=cv2.INTER_LINEAR)
             return cube_img, (x, y, w, h)
-        return img, (0, 0, img.shape[1], img.shape[0])  # Fallback to full image
+        return cv2.resize(img, (90, 90), interpolation=cv2.INTER_LINEAR), (0, 0, img.shape[1], img.shape[0])  # Fallback, resized
 
     def detect_face(self, img):
         # First, isolate the cube
@@ -95,6 +102,10 @@ class CubeDetector:
 
         # Return face detected with color matrix string and bbox for overlay
         face_colors_str = ''.join(face_colors)
+        # Enforce 3x3: validate exactly 9 colors
+        if len(face_colors_str) != 9:
+            print(f"Warning: Detected face has {len(face_colors_str)} colors, expected 9. Rejecting as invalid for 3x3 cube.")
+            return "face_not_detected", 'UUUUUUUUU', bbox
         return "face_detected", face_colors_str, bbox
 
 
@@ -152,6 +163,10 @@ class CubeDetector:
         face_map['back'] = middle_colors[back_idx] if back_idx is not None else 'U'
 
         full_state = ''.join([''.join(face) for face in faces])
+        # Enforce 3x3: validate exactly 54 colors (6 faces x 9 stickers)
+        if len(full_state) != 54:
+            print(f"Warning: Detected full cube has {len(full_state)} colors, expected 54. Rejecting as invalid for 3x3 cube.")
+            return 'U' * 54
         return full_state
 
 
@@ -179,90 +194,4 @@ class CubeDetector:
     def __repr__(self):
         return self.__str__()
 
-    def detect_presence(self, img):
-        # Improved presence detection based on color variance
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        std_dev = np.std(hsv[:, :, 0])
-        return "cube_present" if std_dev > 10 else "cube_absent"
 
-    def extract_colors(self, hsv):
-        # Extract colors for all 6 faces with dominant color detection
-        height, width = hsv.shape[:2]
-        face_size = min(height, width) // 3
-
-        faces = []
-        for face_row in range(2):
-            for face_col in range(3):
-                face_colors = []
-                for i in range(3):
-                    for j in range(3):
-                        y = face_row * 3 * face_size + i * face_size
-                        x = face_col * 3 * face_size + j * face_size
-                        roi = hsv[y:y+face_size, x:x+face_size]
-                        color = self.get_dominant_color(roi)
-                        face_colors.append(color)
-                faces.append(face_colors)
-
-        middle_colors = [face[4] for face in faces]
-
-        top_color = 'Y'
-        bottom_color = 'W'
-
-        front_index = None
-        for idx, color in enumerate(middle_colors):
-            if color != top_color and color != bottom_color:
-                front_index = idx
-                break
-
-        if front_index is None:
-            front_index = 0
-
-        def left_of(idx):
-            return idx - 1 if idx % 3 != 0 else None
-
-        def right_of(idx):
-            return idx + 1 if idx % 3 != 2 else None
-
-        face_map = {}
-        face_map['top'] = top_color
-        face_map['bottom'] = bottom_color
-        face_map['front'] = middle_colors[front_index]
-
-        right_idx = right_of(front_index)
-        left_idx = left_of(front_index)
-
-        face_map['right'] = middle_colors[right_idx] if right_idx is not None else 'U'
-        face_map['left'] = middle_colors[left_idx] if left_idx is not None else 'U'
-
-        back_idx = 5 - front_index if 0 <= front_index <= 5 else None
-        face_map['back'] = middle_colors[back_idx] if back_idx is not None else 'U'
-
-        full_state = ''.join([''.join(face) for face in faces])
-        return full_state
-
-    def get_dominant_color(self, roi):
-        # Calculate dominant color in HSV region
-        hist = cv2.calcHist([roi], [0], None, [180], [0, 180])
-        dominant_hue = int(np.argmax(hist))
-        avg_saturation = np.mean(roi[:, :, 1])
-        avg_value = np.mean(roi[:, :, 2])
-        for color, (lower, upper) in self.color_ranges.items():
-            if lower[0] <= dominant_hue <= upper[0] and avg_saturation >= lower[1] and avg_value >= lower[2]:
-                return color
-        return 'U'
-
-    def optimize(self):
-        # Placeholder for any optimization steps
-        pass
-
-    def __str__(self):
-        return f"CubeDetector with calibrated={self.calibrated}"
-
-    def __repr__(self):
-        return self.__str__()
-
-    def detect_presence(self, img):
-        # Improved presence detection based on color variance
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-        std_dev = np.std(hsv[:, :, 0])
-        return "cube_present" if std_dev > 10 else "cube_absent"
