@@ -5,6 +5,9 @@ import CubeFaces from './components/CubeFaces'
 import VideoInputDropdown from './components/VideoInputDropdown'
 import Calibration from './components/Calibration'
 
+// Type for RGB color tuple
+type RGB = [number, number, number]
+
 function App() {
   const [status, setStatus] = useState('Connecting to server...')
   const [moves, setMoves] = useState<string[]>([])
@@ -16,29 +19,18 @@ function App() {
   const [selectedDeviceId, setSelectedDeviceId] = useState('')
   const [isConfirming, setIsConfirming] = useState(false)
   const [currentFace, setCurrentFace] = useState('')
-  const [cubeFaces, setCubeFaces] = useState<{[key: string]: string}>({
-    Y: 'YYYYYYYYY', // Yellow
-    W: 'WWWWWWWWW', // White
-    R: 'RRRRRRRRR', // Red
-    G: 'GGGGGGGGG', // Green
-    B: 'BBBBBBBBB', // Blue
-    O: 'OOOOOOOOO'  // Orange
-  })
-  // const [confirmedFaces, setConfirmedFaces] = useState<{[key: string]: boolean}>({
-  //   Y: false,
-  //   W: false,
-  //   R: false,
-  //   G: false,
-  //   B: false,
-  //   O: false
-  // })
 
-  // Update cubeFaces to reflect calibrated colors
-  useEffect(() => {
-    // This effect could be triggered by calibration updates from backend
-    // For now, assume cubeFaces state is updated elsewhere when calibration confirms
-  }, [cubeFaces])
-  const [confirmedFaces, setConfirmedFaces] = useState<{[key: string]: boolean}>({
+  // Store calibrated RGB colors for each face
+  const [calibratedColors, setCalibratedColors] = useState<Record<string, RGB>>({
+    Y: [180, 173, 42],    // Yellow
+    W: [130, 125, 130],  // White
+    R: [170, 18, 33],      // Red
+    G: [4, 97, 21],      // Green
+    B: [0, 33, 84],      // Blue
+    O: [234, 53, 25]     // Orange
+  })
+
+  const [confirmedFaces, setConfirmedFaces] = useState<Record<string, boolean>>({
     Y: false,
     W: false,
     R: false,
@@ -46,22 +38,27 @@ function App() {
     B: false,
     O: false
   })
+
   const [cubeBbox, setCubeBbox] = useState<[number, number, number, number] | undefined>()
   const [liveInputFace, setLiveInputFace] = useState<string | null>(null)
   const [liveInputColors, setLiveInputColors] = useState<string>('UUUUUUUUU')
   const [isLoading, setIsLoading] = useState(true)
   const [isCalibrating, setIsCalibrating] = useState(false)
   const [calibrationMessage, setCalibrationMessage] = useState('')
-  const [detectedColor, setDetectedColor] = useState('')
+  const [detectedColor, setDetectedColor] = useState<RGB | null>(null)
   const [expectedColor, setExpectedColor] = useState('')
-  const [showCalibrationSuccess, setShowCalibrationSuccess] = useState(false)
+  const [showColorSelector, setShowColorSelector] = useState(false)
+  const [selectedColor, setSelectedColor] = useState('Y')
+
   const wsRef = useRef<WebSocket | null>(null)
   const cameraRef = useRef<CameraFeedRef>(null)
 
-  // Consolidated WebSocket connection and loading state management
+  // WebSocket connection with retry and error handling
   useEffect(() => {
     let attempt = 1
     const maxAttempts = 5
+    let ws: WebSocket | null = null
+
     const connectWebSocket = () => {
       if (attempt > maxAttempts) {
         setStatus('Failed to connect to backend after multiple attempts.')
@@ -71,7 +68,7 @@ function App() {
         return
       }
 
-      const ws = new WebSocket('ws://localhost:8000/ws')
+      ws = new WebSocket('ws://localhost:8000/ws')
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -83,7 +80,6 @@ function App() {
 
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
-        console.log('Received message:', data)
         if (data.status === 'cube_detected') {
           setStatus(data.message)
           setIsError(false)
@@ -93,9 +89,10 @@ function App() {
         } else if (data.status === 'face_detected') {
           setStatus(data.message)
           if (data.colors) {
+            // Use only the center piece color for calibration and face update
             const centerColor = data.colors[4]
             setLiveInputFace(centerColor)
-            setLiveInputColors(data.colors)
+            setLiveInputColors(centerColor.repeat(9)) // replicate center color for face panel
           }
           setIsError(false)
         } else if (data.status === 'face_not_detected') {
@@ -128,24 +125,36 @@ function App() {
         } else if (data.status === 'calibration_started') {
           setIsCalibrating(true)
           setCalibrationMessage(data.message || 'Calibration started...')
-          setDetectedColor('')
+          setDetectedColor(null)
           setExpectedColor('')
+          setShowColorSelector(false)
+          setSelectedColor('Y')
         } else if (data.status === 'calibration_update') {
           setCalibrationMessage(data.message || '')
-          setDetectedColor(data.detectedColor || '')
+          if (data.detectedColor && Array.isArray(data.detectedColor) && data.detectedColor.length === 3) {
+            setDetectedColor(data.detectedColor as RGB)
+          } else {
+            setDetectedColor(null)
+          }
           setExpectedColor(data.expectedColor || '')
         } else if (data.status === 'calibration_completed') {
           setCalibrationMessage(data.message || 'Calibration completed.')
           setIsCalibrating(false)
-          setDetectedColor('')
+          setDetectedColor(null)
           setExpectedColor('')
-          // Show calibrate button again by resetting isCalibrating to false
-          setIsCalibrating(false)
+          setShowColorSelector(false)
+          setSelectedColor('Y')
+          // Send calibrated colors to backend
+          if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: 'calibration_update', colors: calibratedColors }))
+          }
         } else if (data.status === 'calibration_reset') {
           setIsCalibrating(false)
           setCalibrationMessage('')
-          setDetectedColor('')
+          setDetectedColor(null)
           setExpectedColor('')
+          setShowColorSelector(false)
+          setSelectedColor('Y')
         } else {
           setStatus(data.message || 'Position the cube so all faces are visible')
           setIsError(false)
@@ -175,16 +184,14 @@ function App() {
     connectWebSocket()
 
     return () => {
-      if (wsRef.current) {
-        wsRef.current.close()
+      if (ws) {
+        ws.close()
       }
     }
-  }, [])
+  }, [calibratedColors])
 
-  // Define a fixed or responsive cube bounding box for the overlay
+  // Define a fixed cube bounding box for overlay
   useEffect(() => {
-    // For simplicity, define a centered square box with size relative to window or video size
-    // Here we use fixed size for demo, can be made dynamic
     const width = 240
     const height = 240
     const x = 320 - width / 2
@@ -192,26 +199,49 @@ function App() {
     setCubeBbox([x, y, width, height])
   }, [])
 
-  // Send cubeBbox to backend via WebSocket periodically
+  // Send cubeBbox to backend periodically
   useEffect(() => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !cubeBbox) return
     const interval = setInterval(() => {
       wsRef.current?.send(JSON.stringify({ type: 'cube_bbox', bbox: cubeBbox }))
-    }, 1000) // send every 1 second
+    }, 1000)
     return () => clearInterval(interval)
   }, [cubeBbox])
 
-  // Render loading animation if loading
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 to-black text-white">
-        <svg className="animate-spin h-16 w-16 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
-        </svg>
-        <p className="mt-4 text-xl font-semibold">Connecting to backend...</p>
-      </div>
-    )
+  // Convert RGB tuple to CSS rgb() string
+  const rgbToCss = (rgb: RGB | null) => {
+    if (!rgb) return 'transparent'
+    return `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`
+  }
+
+  // Handle confirmation of calibration color
+  const handleConfirmColor = () => {
+    if (!detectedColor || !currentFace) return
+    setCalibratedColors(prev => ({ ...prev, [currentFace]: detectedColor }))
+    setConfirmedFaces(prev => ({ ...prev, [currentFace]: true }))
+    setIsConfirming(false)
+    setShowColorSelector(false)
+    setStatus(`Color for face ${currentFace} updated.`)
+  }
+
+  // Handle user denying detected color and selecting from dropdown
+  const handleSelectColor = () => {
+    if (!currentFace) return
+    // Map selectedColor to default RGB
+    const defaultColors: Record<string, RGB> = {
+      Y: [255, 255, 0],
+      W: [255, 255, 255],
+      R: [255, 0, 0],
+      G: [0, 128, 0],
+      B: [0, 0, 255],
+      O: [255, 165, 0]
+    }
+    const newColor = detectedColor || defaultColors[selectedColor] || defaultColors['Y']
+    setCalibratedColors(prev => ({ ...prev, [currentFace]: newColor }))
+    setConfirmedFaces(prev => ({ ...prev, [currentFace]: true }))
+    setShowColorSelector(false)
+    setIsConfirming(false)
+    setStatus(`Color for face ${currentFace} updated.`)
   }
 
   return (
@@ -224,14 +254,16 @@ function App() {
           wsOpen={isWsOpen}
           isCalibrating={isCalibrating}
           calibrationMessage={calibrationMessage}
-          detectedColor={detectedColor}
+          detectedColor={detectedColor ? rgbToCss(detectedColor) : ''}
           expectedColor={expectedColor}
           onStartCalibration={() => setIsCalibrating(true)}
           onResetCalibration={() => {
             setIsCalibrating(false)
             setCalibrationMessage('')
-            setDetectedColor('')
+            setDetectedColor(null)
             setExpectedColor('')
+            setShowColorSelector(false)
+            setSelectedColor('Y')
           }}
         />
       </aside>
@@ -241,48 +273,107 @@ function App() {
         </h1>
         <div className="flex flex-col lg:flex-row items-start justify-center gap-8">
           <div className="flex flex-col items-center">
-            {/* Removed live green label above the video */}
-            {/* <div className={`mb-6 text-xl text-center ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-              {status}
-            </div> */}
-            <CameraFeed ref={cameraRef} ws={wsRef.current} wsOpen={isWsOpen} deviceId={selectedDeviceId} cubeBbox={cubeBbox} liveInputFace={liveInputFace} />
-            {isConfirming && (
+            <CameraFeed
+              ref={cameraRef}
+              ws={wsRef.current}
+              wsOpen={isWsOpen}
+              deviceId={selectedDeviceId}
+              cubeBbox={cubeBbox}
+              liveInputFace={liveInputFace}
+            />
+
+            {isConfirming && !showColorSelector && detectedColor && (
               <div className="flex flex-col items-center mt-4 space-y-2">
                 <div className="text-lg font-semibold">Current Face: {currentFace.toUpperCase()}</div>
-                <div className="flex space-x-4">
+                <div className="flex items-center space-x-4">
+                  <div
+                    className="w-8 h-8 rounded border border-gray-400"
+                    style={{ backgroundColor: rgbToCss(detectedColor) }}
+                  ></div>
+                  <span>The color captured is correct?</span>
                   <button
-                    onClick={() => {
-                      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-                        wsRef.current.send(JSON.stringify({ type: 'confirm_face' }))
-                        setIsConfirming(false)
-                      }
-                    }}
+                    onClick={handleConfirmColor}
                     className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded text-white"
                   >
-                    Next Face
+                    Yes
                   </button>
                   <button
-                    onClick={() => {
-                      setIsConfirming(false)
-                      setStatus(`Please rescan the ${currentFace} face.`)
-                    }}
+                    onClick={() => setShowColorSelector(true)}
                     className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded text-white"
                   >
-                    Re-scan This Face
+                    No
                   </button>
                 </div>
               </div>
             )}
+
+            {showColorSelector && (
+              <div className="flex flex-col items-center mt-4 space-y-2">
+                <label htmlFor="color-select" className="mb-2 font-semibold">
+                  Select the correct color for the face:
+                </label>
+                <select
+                  id="color-select"
+                  className="text-black px-2 py-1 rounded"
+                  value={selectedColor}
+                  onChange={(e) => setSelectedColor(e.target.value)}
+                >
+                  <option value="Y">Yellow</option>
+                  <option value="W">White</option>
+                  <option value="R">Red</option>
+                  <option value="G">Green</option>
+                  <option value="B">Blue</option>
+                  <option value="O">Orange</option>
+                </select>
+                <div className="flex space-x-4 mt-2">
+                  <button
+                    onClick={handleSelectColor}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowColorSelector(false)
+                      setIsConfirming(false)
+                      setStatus(`Please rescan the ${currentFace} face.`)
+                    }}
+                    className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded text-white"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
             <AlgorithmDisplay moves={moves} currentMove={currentMove} isError={isError} />
           </div>
+
           <CubeFaces
-            faces={cubeFaces}
+            faces={Object.keys(calibratedColors).reduce((acc, face) => {
+              acc[face] = rgbToCss(calibratedColors[face])
+              return acc
+            }, {} as Record<string, string>)}
             confirmedFaces={confirmedFaces}
             liveInputFace={liveInputFace}
             liveInputColors={liveInputColors}
             onConfirm={() => {
               if (liveInputFace) {
-                setCubeFaces(prev => ({ ...prev, [liveInputFace]: liveInputColors }))
+                setCalibratedColors(prev => {
+                  const newColors = { ...prev }
+                  newColors[liveInputFace] = liveInputColors.split('').map(c => {
+                    switch (c) {
+                      case 'Y': return [255, 255, 0] as RGB
+                      case 'W': return [255, 255, 255] as RGB
+                      case 'R': return [255, 0, 0] as RGB
+                      case 'G': return [0, 128, 0] as RGB
+                      case 'B': return [0, 0, 255] as RGB
+                      case 'O': return [255, 165, 0] as RGB
+                      default: return [0, 0, 0] as RGB
+                    }
+                  }).flat()
+                  return newColors
+                })
                 setConfirmedFaces(prev => ({ ...prev, [liveInputFace]: true }))
               }
             }}
