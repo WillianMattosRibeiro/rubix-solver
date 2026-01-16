@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "lib": ["dom", "es2017"],
-    "target": "es2017",
+    "lib": ["dom", "dom.iterable", "esnext", "es2015"],
+    "target": "esnext",
     "module": "esnext",
     "moduleResolution": "node",
     "strict": true,
@@ -11,3 +11,13 @@
   },
   "include": ["src"]
 }
+
+// Ensure you have installed @types/react and @types/react-dom as dev dependencies for typings support
+// npm install --save-dev @types/react @types/react-dom
+// or
+// yarn add -D @types/react @types/react-dom
+
+// This configuration enables JSX support and includes necessary libs for React and ES2015 features.
+// After updating, restart your development server to apply changes.
+
+// This fix resolves errors like "Cannot use JSX unless the '--jsx' flag is provided" and missing React typings.

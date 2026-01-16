@@ -73,19 +73,25 @@ const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, dev
         const canvas = canvasRef.current
         const ctx = canvas.getContext('2d')
         if (ctx) {
-          // Reduce size to 320x240 to reduce data
+          const [x, y, w, h] = cubeBbox || [0, 0, videoRef.current.videoWidth, videoRef.current.videoHeight]
+          // Limit size to max 320x240 while preserving aspect ratio
+          let width = w
+          let height = h
           const maxWidth = 320
           const maxHeight = 240
-          const aspectRatio = videoRef.current.videoWidth / videoRef.current.videoHeight
-          let width = maxWidth
-          let height = maxWidth / aspectRatio
+          const aspectRatio = w / h
+          if (width > maxWidth) {
+            width = maxWidth
+            height = maxWidth / aspectRatio
+          }
           if (height > maxHeight) {
             height = maxHeight
             width = maxHeight * aspectRatio
           }
           canvas.width = width
           canvas.height = height
-          ctx.drawImage(videoRef.current, 0, 0, width, height)
+          ctx.clearRect(0, 0, width, height)
+          ctx.drawImage(videoRef.current, x, y, w, h, 0, 0, width, height)
           const dataURL = canvas.toDataURL('image/jpeg', 0.7)
           const base64 = dataURL.split(',')[1]
           console.log('Sending frame automatically, canvas size:', width, height)
@@ -100,7 +106,7 @@ const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, dev
     }, 250) // Send frame every 250ms (4fps)
 
     return () => clearInterval(interval)
-  }, [ws, wsOpen, isVideoReady])
+  }, [ws, wsOpen, isVideoReady, cubeBbox])
 
   // Draw grid overlay when cubeBbox changes
   useEffect(() => {

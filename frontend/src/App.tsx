@@ -30,9 +30,12 @@ function App() {
     O: [234, 53, 25]     // Orange
   })
   const [scannedFaces, setScannedFaces] = useState<ScannedFace[]>([])
+  const [detectedColor, setDetectedColor] = useState('')
+  const [expectedColor, setExpectedColor] = useState('')
   const [isCalibrating, setIsCalibrating] = useState(false)
   const [calibrationMessage, setCalibrationMessage] = useState('')
   const [backendReady, setBackendReady] = useState(false)
+  const [cubeBbox, setCubeBbox] = useState<[number, number, number, number] | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
   const cameraRef = useRef<CameraFeedRef>(null)
@@ -90,6 +93,52 @@ function App() {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
         switch (data.status) {
+          case 'face_detected':
+            if (data.bbox && data.face && data.colors) {
+              setCubeBbox(data.bbox)
+              setScannedFaces(prev => {
+                const existingIndex = prev.findIndex(f => f.face === data.face)
+                if (existingIndex !== -1) {
+                  const updated = [...prev]
+                  updated[existingIndex] = { face: data.face, colors: data.colors, confirmed: false }
+                  return updated
+                } else {
+                  return [...prev, { face: data.face, colors: data.colors, confirmed: false }]
+                }
+              })
+            }
+            setStatus(data.message || 'Face detected')
+            break
+          case 'face_not_detected':
+            setCubeBbox(null)
+            setStatus(data.message || 'No face detected')
+            break
+          case 'face_confirmed':
+            if (data.face) {
+              setScannedFaces(prev => prev.map(f => f.face === data.face ? { ...f, confirmed: true } : f))
+            }
+            setStatus(data.message || 'Face confirmed')
+            break
+          case 'calibration_face_detected':
+            if (data.detectedColor && data.expectedColor) {
+              setDetectedColor(data.detectedColor)
+              setExpectedColor(data.expectedColor)
+            }
+            setStatus(data.message || 'Calibration face detected')
+            break
+          case 'calibration_started':
+            setIsCalibrating(true)
+            setCalibrationMessage(data.message || 'Calibration started')
+            break
+          case 'calibration_next':
+            setCalibrationMessage(data.message || 'Next calibration step')
+            break
+          case 'calibration_complete':
+            setIsCalibrating(false)
+            setCalibrationMessage(data.message || 'Calibration complete')
+            setDetectedColor('')
+            setExpectedColor('')
+            break
           case 'face_scanned':
             if (data.face && data.colors) {
               setScannedFaces(prev => [...prev, { face: data.face, colors: data.colors, confirmed: true }])
@@ -99,10 +148,6 @@ function App() {
           case 'solution_ready':
             setMoves(data.moves || [])
             setStatus(data.message || 'Solution ready')
-            break
-          case 'calibration_step':
-            setIsCalibrating(true)
-            setCalibrationMessage(data.message || '')
             break
           case 'cube_detected':
           case 'no_cube':
@@ -141,6 +186,18 @@ function App() {
     }
   }, [calibratedColors, backendReady])
 
+  // Confirm face handler
+  const handleConfirmFace = (face: string) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'confirm_face', face }))
+    }
+  }
+
+  // Rescan face handler
+  const handleRescanFace = (face: string) => {
+    setScannedFaces(prev => prev.filter(f => f.face !== face))
+  }
+
   // Convert RGB tuple to CSS rgb() string
   const rgbToCss = (rgb: RGB | null) => {
     if (!rgb) return 'transparent'
@@ -161,8 +218,8 @@ function App() {
           wsOpen={isWsOpen}
           isCalibrating={isCalibrating}
           calibrationMessage={calibrationMessage}
-          detectedColor={''} // moved confirmation dialogs to Calibration component
-          expectedColor={''}
+          detectedColor={detectedColor}
+          expectedColor={expectedColor}
           onStartCalibration={() => setIsCalibrating(true)}
           onResetCalibration={() => {
             setIsCalibrating(false)
@@ -180,8 +237,9 @@ function App() {
             ws={wsRef.current}
             wsOpen={isWsOpen}
             deviceId={selectedDeviceId}
+            cubeBbox={cubeBbox}
           />
-          <ScannedFaces scannedFaces={scannedFaces} />
+          <ScannedFaces scannedFaces={scannedFaces} onConfirm={handleConfirmFace} onRescan={handleRescanFace} />
           <section className="w-full max-w-3xl">
             <AlgorithmDisplay moves={moves} currentMove={0} />
           </section>
