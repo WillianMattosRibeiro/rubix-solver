@@ -8,7 +8,14 @@ class CubeDetector:
     def __init__(self):
         # Define default HSV color ranges for Rubik's cube colors
         self.default_color_ranges = {
-            # Calibrated HSV ranges for better distinction, especially between red and orange
+            # Adjusted HSV ranges to better match manual RGB validation
+            # Manual RGB validation:
+            # Y: [180, 173, 42],    // Yellow
+            # W: [130, 125, 130],  // White
+            # R: [170, 18, 33],      // Red
+            # G: [4, 97, 21],      // Green
+            # B: [0, 33, 84],      // Blue
+            # O: [234, 53, 25]     // Orange
             'R': ([0, 120, 70], [10, 255, 255]),  # Red lower range
             'R2': ([170, 120, 70], [180, 255, 255]),  # Red upper range
             'O': ([11, 100, 100], [25, 255, 255]),  # Orange
@@ -17,6 +24,7 @@ class CubeDetector:
             'B': ([90, 50, 50], [130, 255, 255]),  # Blue
             'W': ([0, 0, 200], [180, 30, 255]),  # White
         }
+
         self.color_ranges = self.default_color_ranges.copy()
         self.calibrated_colors = set()  # Track which colors have been calibrated
 
@@ -232,9 +240,19 @@ class CubeDetector:
         dominant_hue = int(np.argmax(hist))
         avg_saturation = np.mean(roi[:, :, 1])
         avg_value = np.mean(roi[:, :, 2])
+
+        # Refine white detection: white has low saturation but high value
+        if avg_saturation < 40 and avg_value > 200:
+            return 'W'
+
         for color, (lower, upper) in self.color_ranges.items():
-            if lower[0] <= dominant_hue <= upper[0] and avg_saturation >= lower[1] and avg_value >= lower[2]:
-                return color
+            # Adjust hue range check to handle wrap-around for red
+            if color == 'R' or color == 'R2':
+                if (dominant_hue >= lower[0] or dominant_hue <= upper[0]) and avg_saturation >= lower[1] and avg_value >= lower[2]:
+                    return 'R'
+            else:
+                if lower[0] <= dominant_hue <= upper[0] and avg_saturation >= lower[1] and avg_value >= lower[2]:
+                    return color
         return 'U'
 
 

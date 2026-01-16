@@ -1,10 +1,9 @@
 interface AlgorithmDisplayProps {
   moves: string[]
   currentMove: number
-  isError?: boolean
 }
 
-const AlgorithmDisplay = ({ moves, currentMove, isError = false }: AlgorithmDisplayProps) => {
+const AlgorithmDisplay = ({ moves, currentMove }: AlgorithmDisplayProps) => {
   if (moves.length === 0) return null
 
   return (
@@ -16,9 +15,7 @@ const AlgorithmDisplay = ({ moves, currentMove, isError = false }: AlgorithmDisp
             key={index}
             className={`px-4 py-2 rounded-lg font-mono text-lg transition-all duration-200 ${
               index === currentMove
-                ? isError
-                  ? 'bg-red-500 text-white shadow-red-500/50 shadow-lg animate-pulse'
-                  : 'bg-green-500 text-white shadow-green-500/50 shadow-lg'
+                ? 'bg-green-500 text-white shadow-green-500/50 shadow-lg'
                 : index < currentMove
                 ? 'bg-gray-600 text-gray-300'
                 : 'bg-gray-700 text-gray-100 hover:bg-gray-600'

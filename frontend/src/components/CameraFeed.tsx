@@ -5,42 +5,19 @@ interface CameraFeedProps {
   wsOpen: boolean
   deviceId?: string
   cubeBbox?: [number, number, number, number]  // x, y, w, h
-  liveInputFace?: string | null
 }
 
 export interface CameraFeedRef {
   capture: () => void
 }
 
-const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, deviceId, cubeBbox, liveInputFace }, ref) => {
+const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, deviceId, cubeBbox }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
   const [isVideoReady, setIsVideoReady] = useState(false)
 
-  useImperativeHandle(ref, () => ({
-    capture: () => {
-      console.log('Capture called, ws readyState:', ws?.readyState, 'video ready:', isVideoReady)
-      if (videoRef.current && canvasRef.current && ws && ws.readyState === WebSocket.OPEN && isVideoReady) {
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
-        if (ctx) {
-          canvas.width = videoRef.current.videoWidth
-          canvas.height = videoRef.current.videoHeight
-          ctx.drawImage(videoRef.current, 0, 0)
-          const dataURL = canvas.toDataURL('image/jpeg', 0.8)
-          const base64 = dataURL.split(',')[1]
-          console.log('Sending frame, base64 length:', base64.length)
-          ws.send(JSON.stringify({ type: 'frame', data: base64 }))
-          console.log('Frame sent')
-        } else {
-          console.log('No canvas context')
-        }
-      } else {
-        console.log('Conditions not met for capture')
-      }
-    }
-  }))
+  // Removed capture method as automatic sending is sufficient
 
   useEffect(() => {
     const startCamera = async () => {
@@ -203,22 +180,7 @@ const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, dev
           ctx.stroke()
         }
 
-        // Draw live detected face color label above the cube
-        if (typeof liveInputFace !== 'undefined' && liveInputFace !== null) {
-          const labelMap: {[key: string]: string} = {
-            Y: 'Yellow',
-            W: 'White',
-            R: 'Red',
-            G: 'Green',
-            B: 'Blue',
-            O: 'Orange'
-          }
-          const label = labelMap[liveInputFace] || 'Unknown'
-          ctx.font = '24px Arial'
-          ctx.fillStyle = 'lime'
-          ctx.textAlign = 'center'
-          ctx.fillText(label, x + w / 2, y - 10)
-        }
+        // Removed liveInputFace label display
 
         // Enforce 3x3: warn if bbox dimensions are too small for 3x3 grid
         if (w < 30 || h < 30) {
@@ -239,27 +201,10 @@ const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, dev
     }
 
     draw()
-  }, [cubeBbox, liveInputFace])
+  }, [cubeBbox])
 
   // Modify frame capture to crop to cubeBbox if available
-  useImperativeHandle(ref, () => ({
-    capture: () => {
-      if (videoRef.current && canvasRef.current && ws && ws.readyState === WebSocket.OPEN && isVideoReady) {
-        const canvas = canvasRef.current
-        const ctx = canvas.getContext('2d')
-        if (ctx) {
-          const [x, y, w, h] = cubeBbox || [0, 0, videoRef.current.videoWidth, videoRef.current.videoHeight]
-          canvas.width = w
-          canvas.height = h
-          ctx.clearRect(0, 0, w, h)
-          ctx.drawImage(videoRef.current, x, y, w, h, 0, 0, w, h)
-          const dataURL = canvas.toDataURL('image/jpeg', 0.8)
-          const base64 = dataURL.split(',')[1]
-          ws.send(JSON.stringify({ type: 'frame', data: base64 }))
-        }
-      }
-    }
-  }))
+  // Removed capture method
 
   // Modify automatic frame sending to crop to cubeBbox if available
   useEffect(() => {
