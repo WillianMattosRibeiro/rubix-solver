@@ -5,13 +5,16 @@ interface CameraFeedProps {
   wsOpen: boolean
   deviceId?: string
   cubeBbox?: [number, number, number, number]  // x, y, w, h
+  scanningPhase?: boolean
+  currentFaceIndex?: number
+  scanProgress?: number
 }
 
 export interface CameraFeedRef {
   capture: () => void
 }
 
-const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, deviceId, cubeBbox }, ref) => {
+const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, deviceId, cubeBbox, scanningPhase, currentFaceIndex, scanProgress }, ref) => {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const overlayRef = useRef<HTMLCanvasElement>(null)
@@ -201,13 +204,30 @@ const CameraFeed = forwardRef<CameraFeedRef, CameraFeedProps>(({ ws, wsOpen, dev
       ctx.font = '18px Arial'
       ctx.fillStyle = 'white'
       ctx.textAlign = 'center'
-      ctx.fillText('Place the Rubik\'s Cube inside the square', overlay.width / 2, 30)
+      let instructionText = 'Place the Rubik\'s Cube in front of the camera.'
+      if (scanningPhase && currentFaceIndex !== undefined) {
+        const faces = ['front', 'right', 'back', 'left', 'top', 'bottom']
+        const faceNames = ['FRONT', 'RIGHT', 'BACK', 'LEFT', 'TOP (yellow center)', 'BOTTOM (white center)']
+        if (currentFaceIndex < faces.length) {
+          instructionText = `Show the ${faceNames[currentFaceIndex]} face (with center piece visible)`
+        } else {
+          instructionText = 'All faces scanned. Generating solution...'
+        }
+      }
+      ctx.fillText(instructionText, overlay.width / 2, 30)
+
+      // Draw scan progress if scanning
+      if (scanningPhase && scanProgress !== undefined) {
+        ctx.font = '16px Arial'
+        ctx.fillStyle = 'yellow'
+        ctx.fillText(`Scanning: ${scanProgress}/6 faces completed`, overlay.width / 2, 55)
+      }
 
       requestAnimationFrame(draw)
     }
 
     draw()
-  }, [cubeBbox])
+  }, [cubeBbox, scanningPhase, currentFaceIndex, scanProgress])
 
   // Modify frame capture to crop to cubeBbox if available
   // Removed capture method

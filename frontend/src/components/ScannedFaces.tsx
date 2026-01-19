@@ -23,15 +23,6 @@ const colorMap: Record<string, string> = {
 }
 
 function ScannedFaces({ scannedFaces, onConfirm, onRescan }: ScannedFacesProps) {
-  React.useEffect(() => {
-    if (scannedFaces.length === 6 && scannedFaces.every(face => face.confirmed)) {
-      // Notify backend all faces confirmed
-      // Assuming ws is accessible globally or passed down, else this should be handled in App
-      // For now, emit a custom event or callback could be used
-      const event = new CustomEvent('all_faces_confirmed')
-      window.dispatchEvent(event)
-    }
-  }, [scannedFaces])
 
   return (
     <section className="w-full max-w-3xl">
@@ -49,18 +40,10 @@ function ScannedFaces({ scannedFaces, onConfirm, onRescan }: ScannedFacesProps) 
                 />
               ))}
             </div>
-            <div className="flex space-x-2">
-              {!confirmed && (
-                <button
-                  onClick={() => onConfirm(face)}
-                  className="flex-1 px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-white"
-                >
-                  Confirm
-                </button>
-              )}
+            <div className="flex justify-center">
               <button
                 onClick={() => onRescan(face)}
-                className="flex-1 px-2 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-white"
+                className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-white text-sm"
               >
                 Rescan
               </button>

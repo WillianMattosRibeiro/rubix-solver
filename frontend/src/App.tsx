@@ -4,13 +4,14 @@ import AlgorithmDisplay from './components/AlgorithmDisplay'
 import VideoInputDropdown from './components/VideoInputDropdown'
 import Calibration from './components/Calibration'
 import ScannedFaces from './components/ScannedFaces'
+import ErrorDisplay from './components/ErrorDisplay'
 
 // Type for RGB color tuple
  type RGB = [number, number, number]
 
 interface ScannedFace {
   face: string
-  colors: string
+  colors: RGB
   confirmed: boolean
 }
 
@@ -36,6 +37,11 @@ function App() {
   const [calibrationMessage, setCalibrationMessage] = useState('')
   const [backendReady, setBackendReady] = useState(false)
   const [cubeBbox, setCubeBbox] = useState<[number, number, number, number] | null>(null)
+  const [detectionErrors, setDetectionErrors] = useState<string[]>([])
+  const [detectionWarnings, setDetectionWarnings] = useState<string[]>([])
+  const [scanningPhase, setScanningPhase] = useState(false)
+  const [currentFaceIndex, setCurrentFaceIndex] = useState(0)
+  const [scanProgress, setScanProgress] = useState(0)
 
   const wsRef = useRef<WebSocket | null>(null)
   const cameraRef = useRef<CameraFeedRef>(null)
@@ -93,25 +99,18 @@ function App() {
       ws.onmessage = (event) => {
         const data = JSON.parse(event.data)
         switch (data.status) {
-          case 'face_detected':
-            if (data.bbox && data.face && data.colors) {
-              setCubeBbox(data.bbox)
-              setScannedFaces(prev => {
-                const existingIndex = prev.findIndex(f => f.face === data.face)
-                if (existingIndex !== -1) {
-                  const updated = [...prev]
-                  updated[existingIndex] = { face: data.face, colors: data.colors, confirmed: false }
-                  return updated
-                } else {
-                  return [...prev, { face: data.face, colors: data.colors, confirmed: false }]
-                }
-              })
-            }
-            setStatus(data.message || 'Face detected')
-            break
           case 'face_not_detected':
             setCubeBbox(null)
-            setStatus(data.message || 'No face detected')
+            setStatus(data.message || 'Detection failed: No cube detected. Try better lighting or adjust cube angle.')
+            break
+          case 'detection_error':
+            setDetectionErrors(prev => [...prev, `${new Date().toLocaleTimeString()}: ${data.message || 'Detection error'}`])
+            break
+          case 'detection_warning':
+            setDetectionWarnings(prev => [...prev, `${new Date().toLocaleTimeString()}: ${data.message || 'Detection warning'}`])
+            break
+          case 'processing_timeout':
+            setDetectionWarnings(prev => [...prev, `${new Date().toLocaleTimeString()}: Processing timeout - detection is taking too long`])
             break
           case 'face_confirmed':
             if (data.face) {
@@ -141,19 +140,49 @@ function App() {
             break
           case 'face_scanned':
             if (data.face && data.colors) {
-              setScannedFaces(prev => [...prev, { face: data.face, colors: data.colors, confirmed: true }])
+              setScannedFaces(prev => [...prev, { face: data.face, colors: data.colors as RGB, confirmed: true }])
             }
             setStatus(data.message || 'Face scanned')
             break
+          case 'cube_detected':
+            setScanningPhase(true)
+            setCurrentFaceIndex(0)
+            setScanProgress(0)
+            setStatus(data.message || 'Cube detected. Starting cube scan...' )
+            break
+          case 'face_detected':
+            if (data.bbox && data.face && data.colors) {
+              setCubeBbox(data.bbox)
+              setScannedFaces(prev => {
+                const existingIndex = prev.findIndex(f => f.face === data.face)
+                if (existingIndex !== -1) {
+                  const updated = [...prev]
+                  updated[existingIndex] = { face: data.face, colors: data.colors as RGB, confirmed: true }
+                  return updated
+                } else {
+                  return [...prev, { face: data.face, colors: data.colors as RGB, confirmed: true }]
+                }
+              })
+              setScanProgress(prev => prev + 1)
+              setCurrentFaceIndex(prev => prev + 1)
+            }
+            setStatus(data.message || `✓ ${data.face} face scanned successfully`)
+            break
+          case 'scan_complete':
+            setScanningPhase(false)
+            setStatus(data.message || 'All faces scanned. Generating solution...' )
+            break
           case 'solution_ready':
             setMoves(data.moves || [])
-            setStatus(data.message || 'Solution ready')
+            setStatus(data.message || 'Solution found!' )
             break
-          case 'cube_detected':
           case 'no_cube':
+            setScanningPhase(false)
+            setStatus(data.message || "No cube detected. Please place the Rubik's Cube in front of the camera." )
+            break
           case 'processing':
           case 'solved':
-            setStatus(data.message || '')
+            setStatus(data.message || '' )
             break
           default:
             setStatus(data.message || 'Position the cube so all faces are visible')
@@ -198,6 +227,15 @@ function App() {
     setScannedFaces(prev => prev.filter(f => f.face !== face))
   }
 
+  // Dismiss error/warning handler
+  const handleDismissAlert = (index: number, type: 'error' | 'warning') => {
+    if (type === 'error') {
+      setDetectionErrors(prev => prev.filter((_, i) => i !== index))
+    } else {
+      setDetectionWarnings(prev => prev.filter((_, i) => i !== index))
+    }
+  }
+
   // Convert RGB tuple to CSS rgb() string
   const rgbToCss = (rgb: RGB | null) => {
     if (!rgb) return 'transparent'
@@ -232,17 +270,21 @@ function App() {
           Rubik's Cube Solver
         </h1>
         <div className="flex flex-col items-center justify-center gap-8">
+          <section className="w-full max-w-3xl">
+            <AlgorithmDisplay moves={moves} currentMove={0} />
+          </section>
           <CameraFeed
             ref={cameraRef}
             ws={wsRef.current}
             wsOpen={isWsOpen}
             deviceId={selectedDeviceId}
             cubeBbox={cubeBbox}
+            scanningPhase={scanningPhase}
+            currentFaceIndex={currentFaceIndex}
+            scanProgress={scanProgress}
           />
+          <ErrorDisplay errors={detectionErrors} warnings={detectionWarnings} onDismiss={handleDismissAlert} />
           <ScannedFaces scannedFaces={scannedFaces} onConfirm={handleConfirmFace} onRescan={handleRescanFace} />
-          <section className="w-full max-w-3xl">
-            <AlgorithmDisplay moves={moves} currentMove={0} />
-          </section>
         </div>
       </main>
     </div>
